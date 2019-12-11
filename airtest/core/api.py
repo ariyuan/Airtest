@@ -255,7 +255,7 @@ def touch(v, times=1, x_offset=0, y_offset=0, **kwargs):
     :return: finial position to be clicked
     :platforms: Android, Windows, iOS
     """
-    if isinstance(v, Template):
+    if isinstance(v, Template) or isinstance(v, list):
         pos = loop_find(v, timeout=ST.FIND_TIMEOUT)
     else:
         try_log_screen()
@@ -273,7 +273,7 @@ click = touch  # click is alias of touch
 
 @logwrap
 def double_click(v):
-    if isinstance(v, Template):
+    if isinstance(v, Template) or isinstance(v, list):
         pos = loop_find(v, timeout=ST.FIND_TIMEOUT)
     else:
         try_log_screen()
@@ -304,14 +304,14 @@ def swipe(v1, v2=None, vector=None, **kwargs):
     :return: Origin position and target position
     :platforms: Android, Windows, iOS
     """
-    if isinstance(v1, Template):
+    if isinstance(v1, Template) or isinstance(v1, list):
         pos1 = loop_find(v1, timeout=ST.FIND_TIMEOUT)
     else:
         try_log_screen()
         pos1 = v1
 
     if v2:
-        if isinstance(v2, Template):
+        if isinstance(v2, Template) or isinstance(v2, list):
             pos2 = loop_find(v2, timeout=ST.FIND_TIMEOUT_TMP)
         else:
             pos2 = v2
