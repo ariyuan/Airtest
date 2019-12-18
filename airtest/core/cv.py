@@ -63,10 +63,15 @@ def loop_find(query, timeout=ST.FIND_TIMEOUT, threshold=None, interval=0.5, inte
         else:
             if threshold:
                 query.threshold = threshold
-            match_pos = query.match_in(screen)
-            if match_pos:
-                try_log_screen(screen)
-                return match_pos
+            if isinstance(query, Template):
+                query_list = [query]
+            else:
+                query_list = query
+            for q in query_list:
+                match_pos = q.match_in(screen)
+                if match_pos:
+                    try_log_screen(screen)
+                    return match_pos
 
         if intervalfunc is not None:
             intervalfunc()
