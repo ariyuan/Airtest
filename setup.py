@@ -14,7 +14,7 @@ if sys.platform == "win32":
 
 
 setup(
-    name='airtest-ex',
+    name='airtestex',
     version='1.0.0',
     author='Ari Yuan',
     description='Personal update for airtest',
