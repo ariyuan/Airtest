@@ -60,4 +60,7 @@ class RawImageProcessor:
         return highest_rate_word[1].get_center_position()
 
 
-
+if __name__ == "__main__":
+    raw = RawImageProcessor.load_image("./ForOCRTest.png")
+    recognized_words = RawImageProcessor.drill_down(raw)
+    print(RawImageProcessor.get_highest_word_position(recognized_words, "hello"))
