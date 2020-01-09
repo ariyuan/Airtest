@@ -14,13 +14,11 @@ if sys.platform == "win32":
 
 
 setup(
-    name='airtest',
-    version='1.1.1',
-    author='Netease Games',
-    author_email='gzliuxin@corp.netease.com',
+    name='airtest-ex',
+    version='1.0.0',
+    author='Ari Yuan',
     description='UI Test Automation Framework for Games and Apps on Android/iOS/Windows/Linux',
     long_description='UI Test Automation Framework for Games and Apps on Android/iOS/Windows, present by NetEase Games',
-    url='https://github.com/AirtestProject/Airtest',
     license='Apache License 2.0',
     keywords=['automation', 'automated-test', 'game', 'android', 'ios', 'windows', 'linux'],
     packages=find_packages(exclude=['cover', 'playground', 'tests', 'dist']),
