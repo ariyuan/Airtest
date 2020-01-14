@@ -10,8 +10,8 @@ import win32api
 from pywinauto.application import Application
 from pywinauto import mouse, keyboard
 from pywinauto.win32structures import RECT
-from pywinauto.win32functions import SetForegroundWindow, GetSystemMetrics  # ,SetProcessDPIAware
-
+from pywinauto.win32functions import GetSystemMetrics  # ,SetProcessDPIAware
+from win32gui import SetForegroundWindow
 from airtest.core.win.ctypesinput import key_press, key_release
 from airtest.core.win.screen import screenshot
 
