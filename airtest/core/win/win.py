@@ -11,8 +11,10 @@ import win32api
 from pywinauto.application import Application
 from pywinauto import mouse, keyboard
 from pywinauto.win32structures import RECT
-from pywinauto.win32functions import SetForegroundWindow, GetSystemMetrics
-
+# To be compitible with pywinauto 0.68 which does not contain SetForegroundWindow
+from pywinauto.win32functions import GetSystemMetrics
+# import SetForegroundWindow from another lib
+from win32gui import SetForegroundWindow
 from airtest.core.win.ctypesinput import key_press, key_release
 from airtest.core.win.screen import screenshot
 
