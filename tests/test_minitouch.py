@@ -22,7 +22,8 @@ class TestMiniTouchBase(unittest.TestCase):
         output = self.adb.raw_shell("ps").strip()
         cnt = 0
         for line in output.splitlines():
-            if "minitouch" in line and "do_exit" not in line:
+            if "minitouch" in line and line.split(" ")[-2] not in ["Z", "T", "X"]:
+                # 进程状态是睡眠或运行
                 cnt += 1
         return cnt
 

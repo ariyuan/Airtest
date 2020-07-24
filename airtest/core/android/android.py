@@ -8,13 +8,17 @@ from airtest import aircv
 from airtest.utils.logger import get_logger
 from airtest.core.device import Device
 from airtest.core.android.ime import YosemiteIme
-from airtest.core.android.constant import CAP_METHOD, TOUCH_METHOD, IME_METHOD, ORI_METHOD, SDK_VERISON_NEW
+from airtest.core.android.constant import CAP_METHOD, TOUCH_METHOD, IME_METHOD, ORI_METHOD,\
+    SDK_VERISON_ANDROID7, SDK_VERISON_ANDROID10
 from airtest.core.android.adb import ADB
 from airtest.core.android.minicap import Minicap
-from airtest.core.android.minitouch import Minitouch
+from airtest.core.android.touch_methods.minitouch import Minitouch
+from airtest.core.android.touch_methods.maxtouch import Maxtouch
 from airtest.core.android.javacap import Javacap
 from airtest.core.android.rotation import RotationWatcher, XYTransformer
 from airtest.core.android.recorder import Recorder
+from airtest.core.android.touch_methods.touch_proxy import TouchProxy, AdbTouchImplementation, \
+    MinitouchImplementation, MaxtouchImplementation
 
 LOGGING = get_logger(__name__)
 
@@ -27,27 +31,53 @@ class Android(Device):
                  touch_method=TOUCH_METHOD.MINITOUCH,
                  ime_method=IME_METHOD.YOSEMITEIME,
                  ori_method=ORI_METHOD.MINICAP,
-                 ):
+                 display_id=None,
+                 input_event=None):
         super(Android, self).__init__()
         self.serialno = serialno or self.get_default_device()
         self.cap_method = cap_method.upper()
         self.touch_method = touch_method.upper()
         self.ime_method = ime_method.upper()
         self.ori_method = ori_method.upper()
+        self.display_id = display_id
+        self.input_event = input_event
         # init adb
-        self.adb = ADB(self.serialno, server_addr=host)
+        self.adb = ADB(self.serialno, server_addr=host, display_id=self.display_id, input_event=self.input_event)
         self.adb.wait_for_device()
         self.sdk_version = self.adb.sdk_version
+        if self.sdk_version >= SDK_VERISON_ANDROID10 and self.touch_method == TOUCH_METHOD.MINITOUCH:
+            self.touch_method = TOUCH_METHOD.MAXTOUCH
         self._display_info = {}
         self._current_orientation = None
         # init components
         self.rotation_watcher = RotationWatcher(self.adb)
-        self.minicap = Minicap(self.adb, ori_function=self.get_display_info)
+        self.minicap = Minicap(self.adb, ori_function=self.get_display_info, display_id=self.display_id)
         self.javacap = Javacap(self.adb)
-        self.minitouch = Minitouch(self.adb, ori_function=self.get_display_info)
+        self.minitouch = Minitouch(self.adb, ori_function=self.get_display_info, input_event=self.input_event)
+        self.maxtouch = Maxtouch(self.adb, ori_function=self.get_display_info)
+
         self.yosemite_ime = YosemiteIme(self.adb)
         self.recorder = Recorder(self.adb)
         self._register_rotation_watcher()
+
+        self._touch_proxy = None
+
+    @property
+    def touch_proxy(self):
+        """
+        Perform touch operation according to self.touch_method
+        :return:
+        """
+        if self._touch_proxy and self.touch_method == self._touch_proxy.METHOD_NAME:
+            return self._touch_proxy
+        if self.touch_method == TOUCH_METHOD.MINITOUCH:
+            impl = MinitouchImplementation(self.minitouch, self._touch_point_by_orientation)
+        elif self.touch_method == TOUCH_METHOD.MAXTOUCH:
+            impl = MaxtouchImplementation(self.maxtouch, self._touch_point_by_orientation)
+        else:
+            impl = AdbTouchImplementation(self.adb)
+        self._touch_proxy = TouchProxy(impl)
+        return self._touch_proxy
 
     def get_default_device(self):
         """
@@ -63,7 +93,12 @@ class Android(Device):
 
     @property
     def uuid(self):
-        return self.serialno
+        ult = [self.serialno]
+        if self.display_id:
+            ult.append(self.display_id)
+        if self.input_event:
+            ult.append(self.input_event)
+        return "_".join(ult)
 
     def list_app(self, third_only=False):
         """
@@ -202,13 +237,14 @@ class Android(Device):
         """
         return self.adb.uninstall_app(package)
 
-    def snapshot(self, filename=None, ensure_orientation=True):
+    def snapshot(self, filename=None, ensure_orientation=True, quality=10):
         """
         Take the screenshot of the display. The output is send to stdout by default.
 
         Args:
             filename: name of the file where to store the screenshot, default is None which is stdout
             ensure_orientation: True or False whether to keep the orientation same as display
+            quality: The image quality, integer in range [1, 99]
 
         Returns:
             screenshot output
@@ -241,10 +277,10 @@ class Android(Device):
                 if w < h:  # 当前是横屏，但是图片是竖的，则旋转，针对sdk<=16的机器
                     screen = aircv.rotate(screen, self.display_info["orientation"] * 90, clockwise=False)
             # adb 截图总是要根据orientation旋转，但是SDK版本大于等于25(Android7.1以后)无需额外旋转
-            elif self.cap_method == CAP_METHOD.ADBCAP and self.sdk_version <= SDK_VERISON_NEW:
+            elif self.cap_method == CAP_METHOD.ADBCAP and self.sdk_version <= SDK_VERISON_ANDROID7:
                 screen = aircv.rotate(screen, self.display_info["orientation"] * 90, clockwise=False)
         if filename:
-            aircv.imwrite(filename, screen)
+            aircv.imwrite(filename, screen, quality)
         return screen
 
     def shell(self, *args, **kwargs):
@@ -339,11 +375,7 @@ class Android(Device):
             None
 
         """
-        if self.touch_method == TOUCH_METHOD.MINITOUCH:
-            pos = self._touch_point_by_orientation(pos)
-            self.minitouch.touch(pos, duration=duration)
-        else:
-            self.adb.touch(pos)
+        self.touch_proxy.touch(pos, duration)
 
     def double_click(self, pos):
         self.touch(pos)
@@ -365,32 +397,58 @@ class Android(Device):
             None
 
         """
-        if self.touch_method == TOUCH_METHOD.MINITOUCH:
-            p1 = self._touch_point_by_orientation(p1)
-            p2 = self._touch_point_by_orientation(p2)
-            if fingers == 1:
-                self.minitouch.swipe(p1, p2, duration=duration, steps=steps)
-            elif fingers == 2:
-                self.minitouch.two_finger_swipe(p1, p2, duration=duration, steps=steps)
-            else:
-                raise Exception("param fingers should be 1 or 2")
-        else:
-            duration *= 1000  # adb的swipe操作时间是以毫秒为单位的。
-            self.adb.swipe(p1, p2, duration=duration)
+        self.touch_proxy.swipe(p1, p2, duration=duration, steps=steps, fingers=fingers)
 
-    def pinch(self, *args, **kwargs):
+    def pinch(self, center=None, percent=0.5, duration=0.5, steps=5, in_or_out='in'):
         """
-        Perform pinch event on the device
+        Perform pinch event on the device, only for minitouch and maxtouch
 
         Args:
-            *args: optional arguments
-            **kwargs: optional arguments
+            center: the center point of the pinch operation
+            percent: pinch distance to half of screen, default is 0.5
+            duration: time interval for swipe duration, default is 0.8
+            steps: size of swipe step, default is 5
+            in_or_out: pinch in or pinch out, default is 'in'
+
+        Returns:
+            None
+
+        Raises:
+            TypeError: An error occurred when center is not a list/tuple or None
+
+        """
+        self.touch_proxy.pinch(center=center, percent=percent, duration=duration, steps=steps, in_or_out=in_or_out)
+
+    def swipe_along(self, coordinates_list, duration=0.8, steps=5):
+        """
+        Perform swipe event across multiple points in sequence, only for minitouch and maxtouch
+
+        Args:
+            coordinates_list: list of coordinates: [(x1, y1), (x2, y2), (x3, y3)]
+            duration: time interval for swipe duration, default is 0.8
+            steps: size of swipe step, default is 5
 
         Returns:
             None
 
         """
-        return self.minitouch.pinch(*args, **kwargs)
+        self.touch_proxy.swipe_along(coordinates_list, duration=duration, steps=steps)
+
+    def two_finger_swipe(self, tuple_from_xy, tuple_to_xy, duration=0.8, steps=5, offset=(0, 50)):
+        """
+        Perform two finger swipe action, only for minitouch and maxtouch
+
+        Args:
+            tuple_from_xy: start point
+            tuple_to_xy: end point
+            duration: time interval for swipe duration, default is 0.8
+            steps: size of swipe step, default is 5
+            offset: coordinate offset of the second finger, default is (0, 50)
+
+        Returns:
+            None
+        """
+        self.touch_proxy.two_finger_swipe(tuple_from_xy, tuple_to_xy, duration=duration, steps=steps, offset=offset)
 
     def logcat(self, *args, **kwargs):
         """
