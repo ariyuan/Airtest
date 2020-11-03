@@ -33,7 +33,7 @@ if sys.platform == "win32":
 
 setup(
     name='airtestex',
-    version='1.0.0',
+    version='1.1.1',
     author='Ari Yuan',
     description='Personal update for airtest',
     long_description='Added some new featurs based on airtest',
